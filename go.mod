@@ -1,3 +1,3 @@
-module github.com/patyukin/bs-credit
+module github.com/patyukin/mbs-credits
 
 go 1.23.2
