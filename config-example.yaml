@@ -1,0 +1,14 @@
+min_log_level: "debug"
+jwt_secret: "jwt_secret"
+grpc_server:
+  port: 5011
+  max_connection_idle: 5
+  timeout: 15
+  max_connection_age: 5
+http_server:
+  port: 5012
+postgresql_dsn: "host=postgres port=5432 user=mbsuser password=12345 dbname=auth sslmode=disable"
+redis_dsn: "redis:6379"
+rabbitmq_url: "amqp://admin:admin@rabbitmq:5672/"
+telegram_bot_name: WellnessInfo_bot
+tracer_host: "http://jaeger:14268"

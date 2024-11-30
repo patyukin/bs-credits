@@ -1,0 +1,18 @@
+services:
+  mbs-credit:
+    build:
+      dockerfile: local.Dockerfile
+    container_name: mbs-credit-container
+    volumes:
+      - .:/app
+    restart: always
+    ports:
+      - "5051:5051"
+      - "5052:5052"
+    networks:
+      - mbs
+
+networks:
+  mbs:
+    name: mbs
+    external: true
