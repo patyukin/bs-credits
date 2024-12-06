@@ -8,9 +8,19 @@ import (
 	"github.com/patyukin/mbs-credits/internal/model"
 	kafkaModel "github.com/patyukin/mbs-pkg/pkg/model"
 	desc "github.com/patyukin/mbs-pkg/pkg/proto/credit_v1"
+	"github.com/rs/zerolog/log"
 	"math"
 	"time"
 )
+
+type Loan struct {
+	CreditID       string    // Идентификатор кредита
+	Principal      int64     // Основная сумма кредита в копейках
+	InterestRate   int32     // Годовая процентная ставка в процентах (например, 20.0 для 20%)
+	NumPayments    int       // Общее количество платежей (месяцев)
+	StartDate      time.Time // Дата начала кредита
+	MonthlyPayment int64     // Ежемесячный платеж в копейках
+}
 
 func (u *UseCase) CreateCreditUseCase(ctx context.Context, in *desc.CreateCreditRequest) (*desc.CreateCreditResponse, error) {
 	err := u.registry.ReadCommitted(ctx, func(ctx context.Context, repo *db.Repository) error {
@@ -19,16 +29,27 @@ func (u *UseCase) CreateCreditUseCase(ctx context.Context, in *desc.CreateCredit
 			return fmt.Errorf("failed repo.SelectCreditApplicationByIDAndUserID: %w", err)
 		}
 
-		c := model.ToModelCredit(creditApplication, in)
+		numPayments := int(in.CreditTermMonths)
+		monthlyPayment := calculateMonthlyPayment(creditApplication.RequestedAmount, creditApplication.InterestRate, numPayments)
+		totalPaid := calculateTotalPaid(monthlyPayment, numPayments)
+
+		c := model.ToModelCredit(creditApplication, in, totalPaid)
 		creditID, err := repo.InsertCredit(ctx, c)
 		if err != nil {
 			return fmt.Errorf("failed repo.InsertCredit: %w", err)
 		}
 
-		numPayments := int(in.CreditTermMonths)
-		schedules := generatePaymentSchedule(creditID, creditApplication.RequestedAmount, creditApplication.InterestRate, c.StartDate, numPayments)
-		err = repo.InsertPaymentSchedules(ctx, schedules)
-		if err != nil {
+		loan := Loan{
+			CreditID:       creditID,
+			Principal:      creditApplication.RequestedAmount,
+			InterestRate:   creditApplication.InterestRate,
+			NumPayments:    numPayments,
+			StartDate:      c.StartDate,
+			MonthlyPayment: monthlyPayment,
+		}
+
+		schedules := generatePaymentSchedule(loan)
+		if err = repo.InsertPaymentSchedules(ctx, schedules); err != nil {
 			return fmt.Errorf("failed repo.InsertPaymentSchedules: %w", err)
 		}
 
@@ -43,8 +64,7 @@ func (u *UseCase) CreateCreditUseCase(ctx context.Context, in *desc.CreateCredit
 			return fmt.Errorf("failed json.Marshal: %w", err)
 		}
 
-		err = u.kafkaProducer.PublishCreditCreated(ctx, value)
-		if err != nil {
+		if err = u.kafkaProducer.PublishCreditCreated(ctx, value); err != nil {
 			return fmt.Errorf("failed u.kafkaProducer.PublishCreditCreated: %w", err)
 		}
 
@@ -58,46 +78,63 @@ func (u *UseCase) CreateCreditUseCase(ctx context.Context, in *desc.CreateCredit
 }
 
 // calculateMonthlyPayment - calculate monthly payment
-func calculateMonthlyPayment(principal int64, annualInterestRate int64, numPayments int) int64 {
-	P := float64(principal)
-	R := float64(annualInterestRate)
-	r := R / 12 / 100   // Ежемесячная процентная ставка в процентах
-	rDecimal := r / 100 // Ежемесячная процентная ставка в десятичном виде
-	n := float64(numPayments)
+func calculateMonthlyPayment(principal int64, annualInterestRate int32, numPayments int) int64 {
+	log.Debug().Msgf("principal: %v, annualInterestRate: %v, numPayments: %v", principal, annualInterestRate, numPayments)
 
-	pmt := P * rDecimal / (1 - math.Pow(1+rDecimal, -n))
-	return int64(math.Round(pmt))
+	P := float64(principal)          // Основная сумма кредита в копейках
+	R := float64(annualInterestRate) // Годовая процентная ставка в процентах
+	r := R / 12 / 100                // Ежемесячная процентная ставка в десятичном виде (например, 20% годовых -> 0.016666...)
+	n := float64(numPayments)        // Общее количество платежей
+
+	// Формула аннуитетного платежа
+	pmt := P * r / (1 - math.Pow(1+r, -n))
+	return int64(math.Round(pmt)) // Округляем до ближайшей копейки
 }
 
-// generatePaymentSchedule - generate payment schedule
-func generatePaymentSchedule(creditID string, principal int64, annualInterestRate int64, startDate time.Time, numPayments int) []model.PaymentSchedule {
+// calculateTotalPaid - вычисляет общую сумму выплат по кредиту
+func calculateTotalPaid(monthlyPayment int64, numPayments int) int64 {
+	total := float64(monthlyPayment) * float64(numPayments)
+	result := math.Round(total*100) / 100 // Округляем до копеек
+	return int64(result)
+}
+
+// generatePaymentSchedule - генерирует график платежей по кредиту и рассчитывает общую сумму выплат
+func generatePaymentSchedule(loan Loan) []model.PaymentSchedule {
 	var schedules []model.PaymentSchedule
 
-	monthlyPayment := calculateMonthlyPayment(principal, annualInterestRate, numPayments)
-	remainingPrincipal := float64(principal)
-	R := float64(annualInterestRate)
-	r := R / 12 / 100   // Ежемесячная процентная ставка в процентах
-	rDecimal := r / 100 // Ежемесячная процентная ставка в десятичном виде
+	remainingPrincipal := float64(loan.Principal)
+	R := float64(loan.InterestRate)
+	r := R / 12 / 100 // Ежемесячная процентная ставка в десятичном виде
 
-	for i := 0; i < numPayments; i++ {
+	for i := 0; i < loan.NumPayments; i++ {
 		// Расчет процентов за текущий месяц
-		interestPayment := remainingPrincipal * rDecimal
+		interestPayment := remainingPrincipal * r
 		// Расчет погашения основного долга
-		principalPayment := float64(monthlyPayment) - interestPayment
+		principalPayment := float64(loan.MonthlyPayment) - interestPayment
 		// Обновление остатка долга
 		remainingPrincipal -= principalPayment
 
+		// Обеспечиваем, что остаток долга не станет отрицательным из-за округления
+		if remainingPrincipal < 0 {
+			principalPayment += remainingPrincipal
+			remainingPrincipal = 0
+		}
+
 		// Дата следующего платежа
-		dueDate := startDate.AddDate(0, i+1, 0)
+		log.Debug().Msgf("startDate %v, i: %v", loan.StartDate, i)
+		dueDate := loan.StartDate.AddDate(0, i+1, 0)
+		log.Debug().Msgf("startDate %v, i: %v, dueDate: %v", loan.StartDate, i, dueDate)
 		schedule := model.PaymentSchedule{
-			CreditID: creditID,
-			Amount:   monthlyPayment,
+			CreditID: loan.CreditID,
+			Amount:   loan.MonthlyPayment,
 			DueDate:  dueDate,
 			Status:   "SCHEDULED",
 		}
 
 		schedules = append(schedules, schedule)
 	}
+
+	log.Debug().Msgf("schedules: %v", schedules)
 
 	return schedules
 }

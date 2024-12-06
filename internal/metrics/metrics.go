@@ -6,7 +6,7 @@ import (
 )
 
 const (
-	appName   = "mbs_auth"
+	appName   = "mbs_credit"
 	namespace = "mbs"
 )
 

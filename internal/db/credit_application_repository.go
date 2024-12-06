@@ -16,8 +16,9 @@ INSERT INTO credit_applications (
 	requested_amount,
 	interest_rate,
 	status,
+	description,
 	created_at
-) VALUES ($1, $2, $3, $4, $5) RETURNING id`
+) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`
 	row := r.db.QueryRowContext(
 		ctx,
 		query,
@@ -25,6 +26,7 @@ INSERT INTO credit_applications (
 		in.RequestedAmount,
 		in.InterestRate,
 		"PENDING",
+		in.Description,
 		currentTime,
 	)
 
@@ -81,6 +83,7 @@ FROM credit_applications WHERE id = $1 AND user_id = $2 AND status = 'APPROVED'`
 }
 
 func (r *Repository) UpdateCreditApplicationSolution(ctx context.Context, in model.CreditApplicationSolution) error {
+	currentTime := time.Now().UTC()
 	query := `
 UPDATE credit_applications 
 SET
@@ -94,10 +97,10 @@ WHERE id = $6`
 		ctx,
 		query,
 		in.Status,
-		in.DecisionDate,
+		currentTime,
 		in.ApprovedAmount,
 		in.DecisionNotes,
-		time.Now().UTC(),
+		currentTime,
 		in.CreditApplicationID,
 	)
 	if err != nil {

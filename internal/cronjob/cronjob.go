@@ -9,6 +9,7 @@ import (
 
 type UseCase interface {
 	ArchivedCreditApplication(ctx context.Context) error
+	CronCreditPayment(ctx context.Context) error
 }
 
 type CronJob struct {
@@ -28,7 +29,7 @@ func (cj *CronJob) Stop() {
 }
 
 func (cj *CronJob) Run(ctx context.Context) error {
-	_, err := cj.c.AddFunc("*/10 * * * *", func() {
+	_, err := cj.c.AddFunc("*/20 * * * *", func() {
 		log.Info().Msg("run cj.uc.ArchivedCreditApplication")
 
 		if localErr := cj.u.ArchivedCreditApplication(ctx); localErr != nil {
@@ -37,6 +38,17 @@ func (cj *CronJob) Run(ctx context.Context) error {
 	})
 	if err != nil {
 		return fmt.Errorf("failed adding cron job cj.uc.ArchivedCreditApplication: %w", err)
+	}
+
+	_, err = cj.c.AddFunc("* * * * *", func() {
+		log.Info().Msg("run cj.uc.CronCreditPayment")
+
+		if localErr := cj.u.CronCreditPayment(ctx); localErr != nil {
+			log.Error().Msgf("failed cj.uc.CronCreditPayment, err: %v", localErr)
+		}
+	})
+	if err != nil {
+		return fmt.Errorf("failed adding cron job cj.uc.CronCreditPayment: %w", err)
 	}
 
 	cj.c.Start()

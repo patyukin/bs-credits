@@ -7,15 +7,11 @@ import (
 
 type Config struct {
 	MinLogLevel string `yaml:"min_log_level" validate:"required,oneof=debug info warn error"`
-	JwtSecret   string `yaml:"jwt_secret" validate:"required"`
-	HttpServer  struct {
+	HTTPServer  struct {
 		Port int `yaml:"port" validate:"required,numeric"`
 	} `yaml:"http_server" validate:"required"`
 	GRPCServer struct {
-		Port              int `yaml:"port" validate:"required,numeric"`
-		MaxConnectionIdle int `yaml:"max_connection_idle"`
-		Timeout           int `yaml:"timeout"`
-		MaxConnectionAge  int `yaml:"max_connection_age"`
+		Port int `yaml:"port" validate:"required,numeric"`
 	} `yaml:"grpc_server" validate:"required"`
 	PostgreSQLDSN   string `yaml:"postgresql_dsn" validate:"required"`
 	RedisDSN        string `yaml:"redis_dsn" validate:"required"`
@@ -23,9 +19,13 @@ type Config struct {
 	TelegramBotName string `yaml:"telegram_bot_name" validate:"required"`
 	TracerHost      string `yaml:"tracer_host" validate:"required"`
 	Kafka           struct {
-		Brokers []string `yaml:"brokers" validate:"required"`
-		Topic   []string `yaml:"topic" validate:"required"`
+		Brokers       []string `yaml:"brokers" validate:"required"`
+		Topics        []string `yaml:"topics" validate:"required"`
+		ConsumerGroup string   `yaml:"consumer_group" validate:"required"`
 	} `yaml:"kafka" validate:"required"`
+	GRPC struct {
+		AuthService string `yaml:"auth_service" validate:"required"`
+	}
 }
 
 func LoadConfig() (*Config, error) {

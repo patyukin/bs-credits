@@ -2,6 +2,7 @@ package cacher
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/redis/go-redis/v9"
 	"github.com/rs/zerolog/log"
@@ -28,14 +29,46 @@ func (c *Cacher) Close() error {
 	return c.client.Close()
 }
 
-func (c *Cacher) SetCreateApplicationConfirmationCode(ctx context.Context, ID, code string) error {
-	return c.client.Set(ctx, fmt.Sprintf("ca:%s", ID), code, 24*time.Hour).Err()
+func (c *Cacher) SetCreateApplicationConfirmationCode(ctx context.Context, userID, creditApplicationID, code string) error {
+	err := c.client.Set(ctx, fmt.Sprintf("u:%s:ca:%s", userID, creditApplicationID), code, 50*time.Minute).Err()
+	if err != nil {
+		return fmt.Errorf("failed to set create application confirmation code: %w", err)
+	}
+
+	return nil
 }
 
-func (c *Cacher) GetCreateApplicationConfirmationCode(ctx context.Context, ID string) (string, error) {
-	return c.client.Get(ctx, fmt.Sprintf("ca:%s", ID)).Result()
+func (c *Cacher) GetCreateApplicationConfirmationCode(ctx context.Context, userID, code string) (string, error) {
+	pattern := fmt.Sprintf("u:%s:ca:*", userID)
+	keys, err := c.client.Keys(ctx, pattern).Result()
+	if err != nil {
+		return "", fmt.Errorf("failed to get keys: %w", err)
+	}
+
+	var storedCode string
+	for _, key := range keys {
+		storedCode, err = c.client.Get(ctx, key).Result()
+		if errors.Is(err, redis.Nil) {
+			continue
+		}
+
+		if err != nil {
+			return "", fmt.Errorf("failed to get value for key %s: %w", key, err)
+		}
+
+		if storedCode == code {
+			return key[len(fmt.Sprintf("u:%s:pc:", userID)):], nil
+		}
+	}
+
+	return "", fmt.Errorf("payment confirmation code not found for userID: %s and code: %s", userID, code)
 }
 
-func (c *Cacher) DeleteCreateApplicationConfirmationCode(ctx context.Context, ID string) error {
-	return c.client.Del(ctx, fmt.Sprintf("ca:%s", ID)).Err()
+func (c *Cacher) DeleteCreateApplicationConfirmationCode(ctx context.Context, userID, creditApplicationID string) error {
+	err := c.client.Del(ctx, fmt.Sprintf("u:%s:ca:%s", userID, creditApplicationID)).Err()
+	if err != nil {
+		return fmt.Errorf("failed to delete payment confirmation code: %w", err)
+	}
+
+	return nil
 }

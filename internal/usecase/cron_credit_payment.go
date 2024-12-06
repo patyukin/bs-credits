@@ -21,6 +21,10 @@ func (u *UseCase) CronCreditPayment(ctx context.Context) error {
 			return nil
 		}
 
+		if err = repo.UpdatePaymentSchedulesStatus(ctx, paymentSchedules); err != nil {
+			return fmt.Errorf("failed repo.UpdatePaymentSchedulesStatus: %w", err)
+		}
+
 		var msgs []model.CreditPayment
 		for _, paymentSchedule := range paymentSchedules {
 			msgs = append(msgs, model.CreditPayment{
@@ -35,8 +39,7 @@ func (u *UseCase) CronCreditPayment(ctx context.Context) error {
 			return fmt.Errorf("failed to marshal messages: %w", err)
 		}
 
-		err = u.kafkaProducer.PublishCreditPayments(ctx, bytesMsgs)
-		if err != nil {
+		if err = u.kafkaProducer.PublishCreditPayments(ctx, bytesMsgs); err != nil {
 			return fmt.Errorf("failed u.kafkaProducer.PublishCreditPayments: %w", err)
 		}
 

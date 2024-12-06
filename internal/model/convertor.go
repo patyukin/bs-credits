@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-func ToModelCredit(creditApplication CreditApplication, in *desc.CreateCreditRequest) Credit {
+func ToModelCredit(creditApplication CreditApplication, in *desc.CreateCreditRequest, totalPaid int64) Credit {
 	startDate := time.Now()
 	endDate := startDate.AddDate(0, int(in.CreditTermMonths), 0)
 
@@ -19,7 +19,7 @@ func ToModelCredit(creditApplication CreditApplication, in *desc.CreateCreditReq
 		UserID:              creditApplication.UserID,
 		Amount:              creditApplication.RequestedAmount,
 		InterestRate:        creditApplication.InterestRate,
-		RemainingAmount:     creditApplication.RequestedAmount,
+		RemainingAmount:     totalPaid,
 		Status:              "ACTIVE",
 		StartDate:           startDate,
 		EndDate:             endDate,
@@ -54,15 +54,9 @@ func ToModelCreditApplicationSolution(in *desc.UpdateCreditApplicationSolutionRe
 		return CreditApplicationSolution{}, fmt.Errorf("failed creditmapper.EnumToStringCreditApplicationStatus: %w", err)
 	}
 
-	decisionDate, err := time.Parse("2006-01-02", in.DecisionDate)
-	if err != nil {
-		return CreditApplicationSolution{}, fmt.Errorf("failed to parse DecisionDate: %w", err)
-	}
-
 	return CreditApplicationSolution{
 		CreditApplicationID: in.ApplicationId,
 		Status:              status,
-		DecisionDate:        decisionDate,
 		ApprovedAmount:      in.ApprovedAmount,
 		DecisionNotes:       in.DecisionNotes,
 	}, nil

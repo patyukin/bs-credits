@@ -12,7 +12,6 @@ import (
 )
 
 func (r *Repository) InsertPaymentSchedules(ctx context.Context, in []model.PaymentSchedule) error {
-	currentTime := time.Now().UTC()
 	query := `
 	INSERT INTO payment_schedules (credit_id, amount, due_date, status, created_at)
 	VALUES 
@@ -31,11 +30,12 @@ func (r *Repository) InsertPaymentSchedules(ctx context.Context, in []model.Paym
 			schedule.Amount,
 			schedule.DueDate,
 			schedule.Status,
-			currentTime,
+			time.Now().UTC(),
 		)
 
-		query += strings.Join(placeholders, ", ")
 	}
+
+	query += strings.Join(placeholders, ", ")
 
 	_, err := r.db.ExecContext(ctx, query, args...)
 	if err != nil {
@@ -84,10 +84,10 @@ func (r *Repository) SelectPaymentScheduleToPay(ctx context.Context) ([]model.Cr
 SELECT ps.id, ps.amount, c.account_id
 FROM payment_schedules AS ps
 INNER JOIN credits AS c ON c.id = ps.credit_id
-WHERE status = 'SCHEDULED'
-ORDER BY due_date
+WHERE ps.status = 'SCHEDULED' AND ps.due_date < $1
+ORDER BY ps.due_date
 `
-	rows, err := r.db.QueryContext(ctx, query)
+	rows, err := r.db.QueryContext(ctx, query, time.Now().UTC())
 	if err != nil {
 		return nil, fmt.Errorf("failed r.db.QueryContext: %w", err)
 	}
@@ -126,6 +126,57 @@ func (r *Repository) UpdatePaymentScheduleStatus(ctx context.Context, id, status
 	_, err := r.db.ExecContext(ctx, query, status, id)
 	if err != nil {
 		return fmt.Errorf("failed r.db.ExecContext: %w", err)
+	}
+
+	return nil
+}
+
+func (r *Repository) UpdateCreditRemainingAmountByPaymentScheduleID(ctx context.Context, PaymentScheduleID string) error {
+	query := `
+WITH payment_info AS (
+	SELECT
+		ps.credit_id,
+		ps.amount
+	FROM payment_schedules ps
+	WHERE ps.id = $1
+)
+UPDATE credits
+SET
+	remaining_amount = remaining_amount - payment_info.amount,
+	status = CASE
+		WHEN remaining_amount - payment_info.amount = 0 THEN 'CLOSED'
+		ELSE status
+	END
+FROM payment_info
+WHERE credits.id = payment_info.credit_id
+	`
+
+	_, err := r.db.ExecContext(ctx, query, PaymentScheduleID)
+	if err != nil {
+		return fmt.Errorf("failed r.db.ExecContext: %w", err)
+	}
+
+	return nil
+}
+
+func (r *Repository) UpdatePaymentSchedulesStatus(ctx context.Context, paymentSchedules []model.CreditPaymentSchedule) error {
+	placeholders := make([]string, len(paymentSchedules))
+	args := make([]any, len(paymentSchedules)+1)
+
+	for i, id := range paymentSchedules {
+		placeholders[i] = fmt.Sprintf("$%d", i+1)
+		args[i] = id.PaymentScheduleID
+	}
+
+	args[len(paymentSchedules)] = "PROCESSING"
+	query := fmt.Sprintf(
+		`UPDATE payment_schedules SET status = $%d WHERE id IN (%s)`,
+		len(placeholders)+1,
+		strings.Join(placeholders, ","),
+	)
+
+	if _, err := r.db.ExecContext(ctx, query, args...); err != nil {
+		return fmt.Errorf("failed to execute query: %w", err)
 	}
 
 	return nil

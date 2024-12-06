@@ -17,7 +17,7 @@ type CreditApplication struct {
 	ID              string         `json:"id,omitempty"`
 	UserID          string         `json:"user_id,omitempty"`
 	RequestedAmount int64          `json:"requested_amount,omitempty"`
-	InterestRate    int64          `json:"interest_rate,omitempty"`
+	InterestRate    int32          `json:"interest_rate,omitempty"`
 	Status          string         `json:"status,omitempty"`
 	DecisionDate    sql.NullTime   `json:"decision_date"`
 	ApprovedAmount  sql.NullInt64  `json:"approved_amount"`
@@ -33,7 +33,7 @@ type Credit struct {
 	CreditApplicationID string       `json:"credit_application_id,omitempty"`
 	UserID              string       `json:"user_id,omitempty"`
 	Amount              int64        `json:"amount,omitempty"`
-	InterestRate        int64        `json:"interest_rate,omitempty"`
+	InterestRate        int32        `json:"interest_rate,omitempty"`
 	RemainingAmount     int64        `json:"remaining_amount,omitempty"`
 	Status              string       `json:"status,omitempty"`
 	StartDate           time.Time    `json:"start_date"`
