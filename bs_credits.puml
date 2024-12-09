@@ -1,0 +1,55 @@
+@startuml
+participant User
+participant API_Gateway
+participant Auth_Service
+participant CreditsService
+participant PaymentService
+participant MessageBroker
+participant NotificationService
+participant Database
+
+User->>API_Gateway: POST /createCreditApplication
+API_Gateway->>Auth_Service: ValidateUser(token)
+Auth_Service-->>API_Gateway: UserActive / UserInactive
+alt UserActive
+    API_Gateway->>CreditsService: CreateCreditApplication(CreateCreditApplicationRequest)
+    CreditsService->>Database: Сохраняет заявку (status=PENDING)
+    CreditsService->>CreditsService: Обрабатывает заявку
+    CreditsService->>MessageBroker: Отправляет событие credit_approved (application_id, credit_id, user_id, amount)
+    MessageBroker->>PaymentService: Получает событие credit_approved
+    PaymentService->>DatabasePayments: CreateAccount(CreateAccountRequest)
+    DatabasePayments-->>PaymentService: CreateAccountResponse (account_id, account_number)
+    PaymentService->>MessageBroker: Отправляет событие account_created (credit_id, account_id, account_number)
+    MessageBroker->>CreditsService: Получает событие account_created
+    CreditsService->>Database: Обновляет запись кредита с account_id
+    CreditsService->>MessageBroker: Отправляет событие credit_disbursed (credit_id, amount)
+    MessageBroker->>NotificationService: Получает событие credit_disbursed
+    NotificationService->>User: Уведомляет о выдаче кредита
+else UserInactive
+    API_Gateway->>User: Ответ 403 Forbidden
+end
+
+User->>API_Gateway: POST /makePayment
+API_Gateway->>Auth_Service: ValidateUser(token)
+Auth_Service-->>API_Gateway: UserActive / UserInactive
+alt UserActive
+    API_Gateway->>PaymentService: CreatePayment(CreatePaymentRequest)
+    PaymentService->>DatabasePayments: Создаёт транзакцию (transaction_id, status=COMPLETED)
+    PaymentService->>MessageBroker: Отправляет событие payment_completed (transaction_id, credit_id, amount, status)
+    MessageBroker->>CreditsService: Получает событие payment_completed
+    CreditsService->>Database: Обновляет кредит (remaining_amount -= amount)
+    alt remaining_amount <= 0
+        CreditsService->>Database: Обновляет статус кредита на CLOSED
+        CreditsService->>MessageBroker: Отправляет событие credit_closed (credit_id)
+        MessageBroker->>NotificationService: Получает событие credit_closed
+        NotificationService->>User: Уведомляет о полном погашении кредита
+    else
+        CreditsService->>MessageBroker: Отправляет событие payment_processed (credit_id, amount)
+        MessageBroker->>NotificationService: Получает событие payment_processed
+        NotificationService->>User: Уведомляет о выполненном платеже
+    end
+else UserInactive
+    API_Gateway->>User: Ответ 403 Forbidden
+end
+
+@enduml
