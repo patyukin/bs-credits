@@ -25,7 +25,7 @@ INSERT INTO credit_applications (
 		in.UserId,
 		in.RequestedAmount,
 		in.InterestRate,
-		"PENDING",
+		"DRAFT",
 		in.Description,
 		currentTime,
 	)
@@ -57,6 +57,46 @@ SELECT
 	created_at,
 	updated_at
 FROM credit_applications WHERE id = $1 AND user_id = $2 AND status = 'APPROVED'`
+	row := r.db.QueryRowContext(ctx, query, id, userID)
+	if row.Err() != nil {
+		return model.CreditApplication{}, fmt.Errorf("failed r.db.QueryRowContext, row.Err(): %w", row.Err())
+	}
+
+	var ca model.CreditApplication
+	if err := row.Scan(
+		&ca.ID,
+		&ca.UserID,
+		&ca.RequestedAmount,
+		&ca.InterestRate,
+		&ca.Status,
+		&ca.DecisionDate,
+		&ca.ApprovedAmount,
+		&ca.DecisionNotes,
+		&ca.Description,
+		&ca.CreatedAt,
+		&ca.UpdatedAt,
+	); err != nil {
+		return model.CreditApplication{}, fmt.Errorf("failed row.Scan: %w", err)
+	}
+
+	return ca, nil
+}
+
+func (r *Repository) SelectCreditApplicationByID(ctx context.Context, id string, userID string) (model.CreditApplication, error) {
+	query := `
+SELECT
+	id,
+	user_id,
+	requested_amount,
+	interest_rate,
+	status,
+	decision_date,
+	approved_amount,
+	decision_notes,
+	description,
+	created_at,
+	updated_at
+FROM credit_applications WHERE id = $1`
 	row := r.db.QueryRowContext(ctx, query, id, userID)
 	if row.Err() != nil {
 		return model.CreditApplication{}, fmt.Errorf("failed r.db.QueryRowContext, row.Err(): %w", row.Err())

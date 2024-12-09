@@ -19,10 +19,10 @@ type CreditApplication struct {
 	RequestedAmount int64          `json:"requested_amount,omitempty"`
 	InterestRate    int32          `json:"interest_rate,omitempty"`
 	Status          string         `json:"status,omitempty"`
+	Description     string         `json:"description"`
 	DecisionDate    sql.NullTime   `json:"decision_date"`
 	ApprovedAmount  sql.NullInt64  `json:"approved_amount"`
 	DecisionNotes   sql.NullString `json:"decision_notes"`
-	Description     sql.NullString `json:"description"`
 	CreatedAt       time.Time      `json:"created_at"`
 	UpdatedAt       sql.NullTime   `json:"updated_at"`
 }
