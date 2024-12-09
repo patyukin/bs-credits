@@ -8,8 +8,8 @@ on:
 
 env:
   REGISTRY: "cr.selcloud.ru/registry"
-  IMAGE_NAME: "mbs-auth"
-  CONTAINER_NAME: "mbs-auth-container"
+  IMAGE_NAME: "mbs-credit"
+  CONTAINER_NAME: "mbs-credit-container"
 
 jobs:
   lint-and-test:
@@ -89,7 +89,7 @@ jobs:
             docker rm -f $CONTAINER_NAME
 
             # cd to project directory
-            cd ~/mbs-auth
+            cd ~/mbs-credit
 
             # deploy
             ../deploy.sh $TAG_NAME
