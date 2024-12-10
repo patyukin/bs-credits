@@ -64,7 +64,7 @@ func (u *UseCase) CreateCreditUseCase(ctx context.Context, in *desc.CreateCredit
 				return fmt.Errorf("failed repo.UpdateCreditApplicationStatus: %w", err)
 			}
 
-			msg := kafkaModel.CreditCreated{AccountID: in.AccountId, Amount: creditApplication.RequestedAmount}
+			msg := kafkaModel.CreditCreated{AccountID: in.AccountId, Amount: creditApplication.ApprovedAmount.Int64}
 			value, err := json.Marshal(msg)
 			if err != nil {
 				return fmt.Errorf("failed json.Marshal: %w", err)
