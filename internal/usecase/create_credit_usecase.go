@@ -4,13 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
+	"time"
+
 	"github.com/patyukin/mbs-credits/internal/db"
 	"github.com/patyukin/mbs-credits/internal/model"
 	kafkaModel "github.com/patyukin/mbs-pkg/pkg/model"
 	desc "github.com/patyukin/mbs-pkg/pkg/proto/credit_v1"
 	"github.com/rs/zerolog/log"
-	"math"
-	"time"
 )
 
 type Loan struct {
@@ -23,53 +24,59 @@ type Loan struct {
 }
 
 func (u *UseCase) CreateCreditUseCase(ctx context.Context, in *desc.CreateCreditRequest) (*desc.CreateCreditResponse, error) {
-	err := u.registry.ReadCommitted(ctx, func(ctx context.Context, repo *db.Repository) error {
-		creditApplication, err := repo.SelectCreditApplicationByIDAndUserID(ctx, in.ApplicationId, in.UserId)
-		if err != nil {
-			return fmt.Errorf("failed repo.SelectCreditApplicationByIDAndUserID: %w", err)
-		}
+	err := u.registry.ReadCommitted(
+		ctx, func(ctx context.Context, repo *db.Repository) error {
+			creditApplication, err := repo.SelectCreditApplicationByIDAndUserID(ctx, in.ApplicationId, in.UserId)
+			if err != nil {
+				return fmt.Errorf("failed repo.SelectCreditApplicationByIDAndUserID: %w", err)
+			}
 
-		numPayments := int(in.CreditTermMonths)
-		monthlyPayment := calculateMonthlyPayment(creditApplication.RequestedAmount, creditApplication.InterestRate, numPayments)
-		totalPaid := calculateTotalPaid(monthlyPayment, numPayments)
+			if !creditApplication.ApprovedAmount.Valid {
+				return fmt.Errorf("creditApplication.ApprovedAmount is not valid")
+			}
 
-		c := model.ToModelCredit(creditApplication, in, totalPaid)
-		creditID, err := repo.InsertCredit(ctx, c)
-		if err != nil {
-			return fmt.Errorf("failed repo.InsertCredit: %w", err)
-		}
+			numPayments := int(in.CreditTermMonths)
+			monthlyPayment := calculateMonthlyPayment(creditApplication.ApprovedAmount.Int64, creditApplication.InterestRate, numPayments)
+			totalPaid := calculateTotalPaid(monthlyPayment, numPayments)
 
-		loan := Loan{
-			CreditID:       creditID,
-			Principal:      creditApplication.RequestedAmount,
-			InterestRate:   creditApplication.InterestRate,
-			NumPayments:    numPayments,
-			StartDate:      c.StartDate,
-			MonthlyPayment: monthlyPayment,
-		}
+			c := model.ToModelCredit(creditApplication, in, totalPaid)
+			creditID, err := repo.InsertCredit(ctx, c)
+			if err != nil {
+				return fmt.Errorf("failed repo.InsertCredit: %w", err)
+			}
 
-		schedules := generatePaymentSchedule(loan)
-		if err = repo.InsertPaymentSchedules(ctx, schedules); err != nil {
-			return fmt.Errorf("failed repo.InsertPaymentSchedules: %w", err)
-		}
+			loan := Loan{
+				CreditID:       creditID,
+				Principal:      creditApplication.ApprovedAmount.Int64,
+				InterestRate:   creditApplication.InterestRate,
+				NumPayments:    numPayments,
+				StartDate:      c.StartDate,
+				MonthlyPayment: monthlyPayment,
+			}
 
-		err = repo.UpdateCreditApplicationStatus(ctx, creditApplication.ID, "ARCHIVED")
-		if err != nil {
-			return fmt.Errorf("failed repo.UpdateCreditApplicationStatus: %w", err)
-		}
+			schedules := generatePaymentSchedule(loan)
+			if err = repo.InsertPaymentSchedules(ctx, schedules); err != nil {
+				return fmt.Errorf("failed repo.InsertPaymentSchedules: %w", err)
+			}
 
-		msg := kafkaModel.CreditCreated{AccountID: in.AccountId, Amount: creditApplication.RequestedAmount}
-		value, err := json.Marshal(msg)
-		if err != nil {
-			return fmt.Errorf("failed json.Marshal: %w", err)
-		}
+			err = repo.UpdateCreditApplicationStatus(ctx, creditApplication.ID, "ARCHIVED")
+			if err != nil {
+				return fmt.Errorf("failed repo.UpdateCreditApplicationStatus: %w", err)
+			}
 
-		if err = u.kafkaProducer.PublishCreditCreated(ctx, value); err != nil {
-			return fmt.Errorf("failed u.kafkaProducer.PublishCreditCreated: %w", err)
-		}
+			msg := kafkaModel.CreditCreated{AccountID: in.AccountId, Amount: creditApplication.RequestedAmount}
+			value, err := json.Marshal(msg)
+			if err != nil {
+				return fmt.Errorf("failed json.Marshal: %w", err)
+			}
 
-		return nil
-	})
+			if err = u.kafkaProducer.PublishCreditCreated(ctx, value); err != nil {
+				return fmt.Errorf("failed u.kafkaProducer.PublishCreditCreated: %w", err)
+			}
+
+			return nil
+		},
+	)
 	if err != nil {
 		return nil, fmt.Errorf("failed u.registry.ReadCommitted: %w", err)
 	}

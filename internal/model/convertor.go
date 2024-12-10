@@ -2,10 +2,11 @@ package model
 
 import (
 	"fmt"
+	"time"
+
 	"github.com/google/uuid"
 	"github.com/patyukin/mbs-pkg/pkg/mapping/creditmapper"
 	desc "github.com/patyukin/mbs-pkg/pkg/proto/credit_v1"
-	"time"
 )
 
 func ToModelCredit(creditApplication CreditApplication, in *desc.CreateCreditRequest, totalPaid int64) Credit {
@@ -17,7 +18,7 @@ func ToModelCredit(creditApplication CreditApplication, in *desc.CreateCreditReq
 		AccountID:           in.AccountId,
 		CreditApplicationID: creditApplication.ID,
 		UserID:              creditApplication.UserID,
-		Amount:              creditApplication.RequestedAmount,
+		Amount:              creditApplication.ApprovedAmount.Int64,
 		InterestRate:        creditApplication.InterestRate,
 		RemainingAmount:     totalPaid,
 		Status:              "ACTIVE",

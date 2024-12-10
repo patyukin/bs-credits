@@ -21,8 +21,8 @@ CREATE TABLE IF NOT EXISTS credit_applications
 CREATE TABLE IF NOT EXISTS credits
 (
     id                    UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    account_id            UUID UNIQUE,
-    credit_application_id UUID                     NOT NULL,
+    account_id            UUID,
+    credit_application_id UUID UNIQUE              NOT NULL,
     user_id               UUID                     NOT NULL,
     amount                BIGINT                   NOT NULL,
     interest_rate         BIGINT                   NOT NULL, -- процентная ставка

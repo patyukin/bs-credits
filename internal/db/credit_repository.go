@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"fmt"
+
 	"github.com/patyukin/mbs-credits/internal/model"
 )
 
