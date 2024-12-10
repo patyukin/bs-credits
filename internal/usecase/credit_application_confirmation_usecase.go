@@ -4,13 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+
 	"github.com/patyukin/mbs-credits/internal/db"
 	"github.com/patyukin/mbs-pkg/pkg/model"
 	authpb "github.com/patyukin/mbs-pkg/pkg/proto/auth_v1"
 	desc "github.com/patyukin/mbs-pkg/pkg/proto/credit_v1"
 )
 
-func (u *UseCase) CreditApplicationConfirmationUseCase(ctx context.Context, in *desc.CreditApplicationConfirmationRequest) (*desc.CreditApplicationConfirmationResponse, error) {
+func (u *UseCase) CreditApplicationConfirmationUseCase(
+	ctx context.Context, in *desc.CreditApplicationConfirmationRequest,
+) (*desc.CreditApplicationConfirmationResponse, error) {
 	err := u.registry.ReadCommitted(
 		ctx, func(ctx context.Context, repo *db.Repository) error {
 			creditApplicationID, err := u.cacher.GetCreateApplicationConfirmationCode(ctx, in.UserId, in.Code)

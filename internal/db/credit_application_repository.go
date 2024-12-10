@@ -82,7 +82,7 @@ FROM credit_applications WHERE id = $1 AND user_id = $2 AND status = 'APPROVED'`
 	return ca, nil
 }
 
-func (r *Repository) SelectCreditApplicationByID(ctx context.Context, id string, userID string) (model.CreditApplication, error) {
+func (r *Repository) SelectCreditApplicationByID(ctx context.Context, id string) (model.CreditApplication, error) {
 	query := `
 SELECT
 	id,
@@ -97,7 +97,7 @@ SELECT
 	created_at,
 	updated_at
 FROM credit_applications WHERE id = $1`
-	row := r.db.QueryRowContext(ctx, query, id, userID)
+	row := r.db.QueryRowContext(ctx, query, id)
 	if row.Err() != nil {
 		return model.CreditApplication{}, fmt.Errorf("failed r.db.QueryRowContext, row.Err(): %w", row.Err())
 	}
