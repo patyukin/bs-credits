@@ -3,6 +3,12 @@ package main
 import (
 	"context"
 	"fmt"
+	"net"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
 	grpcPrometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	"github.com/patyukin/mbs-credits/internal/cacher"
 	"github.com/patyukin/mbs-credits/internal/config"
@@ -25,11 +31,6 @@ import (
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
-	"net"
-	"os"
-	"os/signal"
-	"syscall"
-	"time"
 )
 
 const ServiceName = "CreditService"
