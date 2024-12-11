@@ -2,10 +2,11 @@ package model
 
 import (
 	"fmt"
+	"time"
+
 	"github.com/google/uuid"
 	"github.com/patyukin/mbs-pkg/pkg/mapping/creditmapper"
 	desc "github.com/patyukin/mbs-pkg/pkg/proto/credit_v1"
-	"time"
 )
 
 func ToModelCredit(creditApplication CreditApplication, in *desc.CreateCreditRequest, totalPaid int64) Credit {
@@ -17,7 +18,7 @@ func ToModelCredit(creditApplication CreditApplication, in *desc.CreateCreditReq
 		AccountID:           in.AccountId,
 		CreditApplicationID: creditApplication.ID,
 		UserID:              creditApplication.UserID,
-		Amount:              creditApplication.RequestedAmount,
+		Amount:              creditApplication.ApprovedAmount.Int64,
 		InterestRate:        creditApplication.InterestRate,
 		RemainingAmount:     totalPaid,
 		Status:              "ACTIVE",
@@ -33,16 +34,13 @@ func ToProtoCreditApplication(in CreditApplication) (*desc.GetCreditApplicationR
 		return nil, fmt.Errorf("failed creditmapper.StringToEnumCreditApplicationStatus: %w", err)
 	}
 
-	decisionDateStr := in.DecisionDate.Time.Format("2006-01-02")
+	decisionDateStr := in.DecisionDate.Time.Format(time.DateOnly)
 	r := &desc.GetCreditApplicationResponse{
 		ApplicationId:  in.ID,
 		Status:         status,
 		DecisionDate:   decisionDateStr,
 		ApprovedAmount: in.ApprovedAmount.Int64,
-	}
-
-	if in.Description.Valid {
-		r.Description = in.Description.String
+		Description:    in.Description,
 	}
 
 	return r, nil
@@ -78,14 +76,14 @@ func ToProtoCredit(in Credit) (*desc.GetCreditResponse, error) {
 			InterestRate:        in.InterestRate,
 			RemainingAmount:     in.RemainingAmount,
 			Status:              status,
-			StartDate:           in.StartDate.Format("2006-01-02"),
-			EndDate:             in.EndDate.Format("2006-01-02"),
-			CreatedAt:           in.CreatedAt.Format("2006-01-02"),
+			StartDate:           in.StartDate.Format(time.DateOnly),
+			EndDate:             in.EndDate.Format(time.DateOnly),
+			CreatedAt:           in.CreatedAt.Format(time.DateOnly),
 		},
 	}
 
 	if in.UpdatedAt.Valid {
-		r.Credit.UpdatedAt = in.UpdatedAt.Time.Format("2006-01-02")
+		r.Credit.UpdatedAt = in.UpdatedAt.Time.Format(time.DateOnly)
 	}
 
 	return r, nil
@@ -99,19 +97,21 @@ func ToProtoCredits(credits []Credit) ([]*desc.Credit, error) {
 			return nil, fmt.Errorf("failed creditmapper.StringToEnumCreditStatus: %w", err)
 		}
 
-		r = append(r, &desc.Credit{
-			CreditId:            c.ID,
-			AccountId:           c.AccountID,
-			CreditApplicationId: c.CreditApplicationID,
-			UserId:              c.UserID,
-			Amount:              c.Amount,
-			InterestRate:        c.InterestRate,
-			RemainingAmount:     c.RemainingAmount,
-			Status:              status,
-			StartDate:           c.StartDate.Format("2006-01-02"),
-			EndDate:             c.EndDate.Format("2006-01-02"),
-			CreatedAt:           c.CreatedAt.Format("2006-01-02"),
-		})
+		r = append(
+			r, &desc.Credit{
+				CreditId:            c.ID,
+				AccountId:           c.AccountID,
+				CreditApplicationId: c.CreditApplicationID,
+				UserId:              c.UserID,
+				Amount:              c.Amount,
+				InterestRate:        c.InterestRate,
+				RemainingAmount:     c.RemainingAmount,
+				Status:              status,
+				StartDate:           c.StartDate.Format(time.DateOnly),
+				EndDate:             c.EndDate.Format(time.DateOnly),
+				CreatedAt:           c.CreatedAt.Format(time.DateOnly),
+			},
+		)
 	}
 
 	return r, nil
@@ -126,12 +126,14 @@ func ToProtoPaymentSchedule(payments []PaymentSchedule) (*desc.GetPaymentSchedul
 			return nil, fmt.Errorf("failed creditmapper.StringToEnumPaymentScheduleStatus: %w", err)
 		}
 
-		r = append(r, &desc.PaymentSchedule{
-			PaymentId: p.ID,
-			Amount:    p.Amount,
-			DueDate:   p.DueDate.Format(time.DateOnly),
-			Status:    status,
-		})
+		r = append(
+			r, &desc.PaymentSchedule{
+				PaymentId: p.ID,
+				Amount:    p.Amount,
+				DueDate:   p.DueDate.Format(time.DateOnly),
+				Status:    status,
+			},
+		)
 	}
 
 	return &desc.GetPaymentScheduleResponse{

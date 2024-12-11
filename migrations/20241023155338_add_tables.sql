@@ -1,7 +1,7 @@
 -- +goose Up
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
-CREATE TYPE credit_application_status AS ENUM ('PENDING', 'APPROVED', 'REJECTED', 'ARCHIVED', 'PROCESSING');
+CREATE TYPE credit_application_status AS ENUM ('DRAFT', 'PENDING', 'APPROVED', 'REJECTED', 'ARCHIVED', 'PROCESSING');
 
 CREATE TABLE IF NOT EXISTS credit_applications
 (
@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS credit_applications
     user_id          UUID                      NOT NULL,
     requested_amount BIGINT                    NOT NULL, -- запрошенная сумма
     interest_rate    BIGINT                    NOT NULL, -- процентная ставка
-    status           credit_application_status NOT NULL, -- 'PENDING', 'APPROVED', 'REJECTED', 'ARCHIVED'
+    status           credit_application_status NOT NULL, -- 'DRAFT', 'PENDING', 'APPROVED', 'REJECTED', 'ARCHIVED'
     description      TEXT                      NOT NULL, -- описание
     decision_date    DATE,                               -- дата принятия решения
     approved_amount  BIGINT,                             -- утвержденная сумма
@@ -21,8 +21,8 @@ CREATE TABLE IF NOT EXISTS credit_applications
 CREATE TABLE IF NOT EXISTS credits
 (
     id                    UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    account_id            UUID UNIQUE,
-    credit_application_id UUID                     NOT NULL,
+    account_id            UUID,
+    credit_application_id UUID UNIQUE              NOT NULL,
     user_id               UUID                     NOT NULL,
     amount                BIGINT                   NOT NULL,
     interest_rate         BIGINT                   NOT NULL, -- процентная ставка

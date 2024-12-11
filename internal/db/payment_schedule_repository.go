@@ -53,7 +53,7 @@ FROM payment_schedules
 WHERE credit_id = $1 AND credit_id IN (SELECT id FROM credits WHERE user_id = $2)
 ORDER BY due_date
 		`
-	rows, err := r.db.QueryContext(ctx, query, userID, creditID)
+	rows, err := r.db.QueryContext(ctx, query, creditID, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed r.db.QueryContext: %w", err)
 	}
